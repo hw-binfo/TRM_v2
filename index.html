@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MB LAB TRM</title>
+
+  <!-- Auth guard runs FIRST: an unauthenticated visitor is redirected to
+       login.html before any plot iframe starts loading. -->
+  <script src="data/auth-guard.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8f8f8;
+      color: #333;
+      padding: 2rem;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .page-header img {
+      height: 94px;
+      border-radius: 6px;
+    }
+
+    h1 { font-weight: 600; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+      display: flex;
+      color: #333;
+      flex-direction: column;
+      min-width: 0;            /* let the card shrink inside the grid track */
+    }
+
+    .card h2 {
+      padding: 1rem 1.25rem;
+      font-size: 1.1rem;
+      font-weight: 500;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .card iframe {
+      width: 100%;
+      height: 500px;
+      border: none;
+      flex: 1 1 auto;
+    }
+
+    .click-hint {
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: #999;
+    }
+
+    /* Enlarge control. This opens an in-page overlay rather than a new tab:
+       the encrypted plot loaders read trm_auth / trm_pw from sessionStorage,
+       and a new tab does not reliably inherit it (it never does when the link
+       carries rel="noopener", and not at all from a file:// page), which is why
+       the old "Open" link landed on "Session expired". Staying in the same
+       document keeps the same sessionStorage. */
+    .card-open {
+      margin-left: auto;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #4a6cf7;
+      background: none;
+      cursor: pointer;
+      white-space: nowrap;
+      padding: 0.15rem 0.5rem;
+      border: 1px solid rgba(74,108,247,0.35);
+      border-radius: 999px;
+      transition: background 0.15s, color 0.15s;
+      font-family: inherit;
+    }
+    .card-open:hover { background: #4a6cf7; color: #fff; }
+
+    /* ── Top row: Technology Roadmap (left) + Phylogenetic Tree (right) ── */
+    .section-row { margin-bottom: 1.5rem; }
+    .tall-card iframe { height: 680px; }
+
+    @media (max-width: 900px) {
+      .tall-card iframe { height: 520px; }
+    }
+
+    /* View switcher above the dendrogram */
+    .view-switch {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.25rem;
+      background: #fafbff;
+      border-bottom: 1px solid #eee;
+      flex-wrap: wrap;
+    }
+    .view-switch-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-right: 0.15rem;
+    }
+    .view-btn {
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid #d8ddf0;
+      background: #fff;
+      color: #555;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .view-btn:hover { background: #eef1fb; }
+    .view-btn.active {
+      background: #4a6cf7;
+      border-color: #4a6cf7;
+      color: #fff;
+    }
+
+    /* Search bar */
+    .search-section {
+      max-width: 580px;
+      margin: 0 auto 2rem;
+    }
+    .search-form {
+      display: flex;
+      border-radius: 999px;
+      overflow: hidden;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.25);
+    }
+    .search-input {
+      flex: 1;
+      padding: 0.75rem 1.25rem;
+      border: none;
+      font-size: 0.97rem;
+      outline: none;
+      color: #333;
+    }
+    .search-btn {
+      padding: 0.75rem 1.4rem;
+      background: #4a6cf7;
+      color: #fff;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .search-btn:hover { background: #3a5ae0; }
+
+    .quick-actions {
+      display: flex;
+      justify-content: center;   /* centred under the search bar */
+      gap: 0.65rem;
+      margin-top: 0.85rem;
+      flex-wrap: wrap;
+    }
+    .quick-btn {
+      display: inline-block;
+      padding: 0.5rem 1.1rem;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.2s, color 0.2s;
+      background: #4a6cf7;
+      color: #fff;
+      border: 1px solid rgba(153,153,153,0.35);
+    }
+    .quick-btn:hover { background: #3a5ae0; }
+    .quick-btn-primary {
+      background: #4a6cf7;
+      color: #fff;
+      border-color: transparent;
+    }
+    .quick-btn-primary:hover { background: #3a5ae0; }
+
+    /* ── Enlarged plot overlay ── */
+    .plot-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(12,14,24,0.62);
+      padding: 2vh 2vw;
+    }
+    .plot-modal.open { display: flex; }
+
+    .plot-modal-box {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+      width: 96vw;
+      height: 94vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .plot-modal-head {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.8rem 1.1rem;
+      border-bottom: 1px solid #eee;
+      flex: 0 0 auto;
+    }
+    .plot-modal-title {
+      font-size: 1rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .plot-modal-hint {
+      font-size: 0.75rem;
+      color: #999;
+      white-space: nowrap;
+    }
+    .plot-modal-close {
+      /* .zoom-controls already carries the margin-left:auto that pushes this
+         group to the right edge; a second auto margin would split the gap. */
+      margin-left: 0.25rem;
+      background: none;
+      border: 1px solid #ddd;
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      font-size: 1.15rem;
+      line-height: 1;
+      color: #666;
+      cursor: pointer;
+      flex: 0 0 auto;
+      transition: background 0.15s, color 0.15s;
+    }
+    .plot-modal-close:hover { background: #e04040; border-color: #e04040; color: #fff; }
+
+    .plot-modal-body {
+      flex: 1 1 auto;
+      position: relative;
+      background: #f8f8f8;
+      overflow: hidden;           /* the stage is scaled; clip it to the box */
+    }
+    /* The chart is wrapped in a stage that carries the zoom transform, so the
+       iframe itself is never resized - SVG charts stay crisp at any zoom. */
+    .plot-zoom-stage {
+      position: absolute;
+      inset: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .plot-zoom-stage iframe { width: 100%; height: 100%; border: none; display: block; }
+    .plot-modal-body.panning { cursor: grabbing; }
+
+    .plot-modal-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #aaa;
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+
+    /* Zoom controls in the overlay header */
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-left: auto;
+      flex: 0 0 auto;
+    }
+    .zoom-btn {
+      font-family: inherit;
+      width: 28px;
+      height: 28px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      color: #555;
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .zoom-btn:hover { background: #eef1fb; border-color: #4a6cf7; color: #4a6cf7; }
+    .zoom-btn.wide { width: auto; padding: 0 0.6rem; font-size: 0.78rem; }
+    .zoom-level {
+      font-size: 0.78rem;
+      color: #666;
+      min-width: 3.4em;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Hamburger menu button */
+    .menu-btn {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.5rem;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      z-index: 200;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+    .menu-btn span {
+      display: block;
+      width: 24px;
+      height: 2.5px;
+      background: #4a6cf7;
+      border-radius: 2px;
+    }
+
+    /* Overlay */
+    .side-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 300;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .side-overlay.open { opacity: 1; pointer-events: auto; }
+
+    /* Side panel */
+    .side-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 260px;
+      height: 100%;
+      background: #4a6cf7;
+      z-index: 400;
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.35);
+    }
+    .side-panel.open { transform: translateX(0); }
+
+    .side-panel-close {
+      align-self: flex-end;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 1.6rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 2rem;
+    }
+    .side-panel-close:hover { color: #a0b4ff; }
+
+    .side-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .side-nav-btn {
+      display: block;
+      padding: 0.8rem 1.1rem;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: background 0.2s;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+    .side-nav-btn:hover { background: rgba(255,255,255,0.18); }
+
+    /* User account button (left of hamburger) */
+    .user-btn {
+      position: fixed;
+      top: 1.25rem;
+      right: 4.5rem;       /* sits left of the 1.5rem + 40px hamburger */
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      color: #3d3d3d;
+      font-size: 1.0rem;
+      font-weight: 500;
+      padding: 0.35rem 0.75rem 0.35rem 0.55rem;
+      cursor: pointer;
+      z-index: 200;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .user-btn:hover { background: rgba(255,255,255,0.22); }
+    .user-btn .u-icon {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #4a6cf7;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.78rem; font-weight: 700; flex-shrink: 0;
+    }
+
+    .side-nav-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+      margin: 0.5rem 0;
+    }
+    .side-nav-btn.logout { color: #ff9999; }
+    .side-nav-btn.logout:hover { background: rgba(255,80,80,0.15); }
+  </style>
+</head>
+<body>
+
+  <!-- User account button -->
+  <a href="accounts.html" class="user-btn" id="user-btn">
+    <span class="u-icon" id="user-icon">&#128100;</span>
+    <span id="user-label">Login</span>
+  </a>
+
+  <!-- Hamburger button -->
+  <button class="menu-btn" id="menu-btn" aria-label="Open menu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <!-- Side panel overlay -->
+  <div class="side-overlay" id="side-overlay"></div>
+
+  <!-- Side panel -->
+  <div class="side-panel" id="side-panel">
+    <button class="side-panel-close" id="side-panel-close" aria-label="Close menu">&times;</button>
+    <nav class="side-nav">
+      <a href="browse.html" class="side-nav-btn">Browse Ingredients</a>
+      <a href="register.html" class="side-nav-btn">Register new ingredient</a>
+      <a href="efficacy-browse.html" class="side-nav-btn">Browse ingredient by efficacy</a>
+      <div class="side-nav-divider"></div>
+      <a href="mypage.html" class="side-nav-btn" id="nav-mypage">My Page</a>
+      <a href="accounts.html" class="side-nav-btn" id="nav-login">Login</a>
+      <button class="side-nav-btn logout" id="nav-logout" style="display:none;">Log out</button>
+    </nav>
+  </div>
+
+  <div class="page-header">
+    <img src="image/MB Lab logo.png" alt="MB Lab logo">
+    <h1>MB LAB TRM</h1>
+  </div>
+
+  <div class="search-section">
+    <form class="search-form" id="search-form" action="search-results.html" method="get">
+      <input class="search-input" type="text" name="q" id="search-input"
+             placeholder="Search by ingredient name or INCI name..." autocomplete="off">
+      <button class="search-btn" type="submit">Search</button>
+    </form>
+    <div class="quick-actions">
+      <a href="browse.html" class="quick-btn">Browse all ingredients</a>
+      <a href="efficacy-browse.html" class="quick-btn">Browse ingredient by efficacy</a>
+      <a href="register.html" class="quick-btn quick-btn-primary">Register new ingredient</a>
+    </div>
+  </div>
+
+  <!-- ── Row 1: Technology Roadmap (left) + Phylogenetic Tree (right) ── -->
+  <div class="grid section-row">
+    <div class="card tall-card">
+      <h2>
+        MB Lab Technology Roadmap
+        <span class="click-hint">Hover a node to list its ingredients</span>
+        <button class="card-open" type="button"
+                data-plot="plots/MBlab_technology_roadmap_sankey_v4_ko.html"
+                data-title="MB Lab Technology Roadmap">&#10530; Enlarge</button>
+      </h2>
+      <iframe id="frame-sankey"
+              src="plots/MBlab_technology_roadmap_sankey_v4_ko.html"
+              title="MB Lab Technology Roadmap (Sankey)" loading="lazy"></iframe>
+    </div>
+
+    <div class="card tall-card">
+      <h2>
+        Ingredient Phylogenetic Tree
+        <span class="click-hint">Click a genus to list its ingredients</span>
+        <button class="card-open" type="button" id="dendro-enlarge"
+                data-title="Ingredient Phylogenetic Tree">&#10530; Enlarge</button>
+      </h2>
+      <div class="view-switch" id="dendro-switch">
+        <span class="view-switch-label">View</span>
+        <button class="view-btn active" type="button"
+                data-src="plots/dendrogram_general_v3.html">General view</button>
+        <button class="view-btn" type="button"
+                data-src="plots/dendrogram_technology_v3.html">Microbiome technology view</button>
+      </div>
+      <iframe id="frame-dendro"
+              src="plots/dendrogram_general_v3.html"
+              title="Ingredient Phylogenetic Tree" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <!-- ── Row 2: Functional profile + efficacy counts ── -->
+  <div class="grid">
+    <div class="card">
+      <h2>
+        Ingredient Functional Profile - Scatter Plot
+        <span class="click-hint">Click a point for ingredient details</span>
+        <button class="card-open" type="button"
+                data-plot="plots/Ingredient_scatter_v2_260917.html"
+                data-title="Ingredient Functional Profile">&#10530; Enlarge</button>
+      </h2>
+      <iframe src="plots/Ingredient_scatter_v2_260917.html"
+              title="Ingredient Functional Profile" loading="lazy"></iframe>
+    </div>
+    <div class="card">
+      <h2>
+        MB LAB Ingredients by Efficacy
+        <span class="click-hint">Click a bar to see ingredients</span>
+        <button class="card-open" type="button"
+                data-plot="plots/barchart_v2_260917.html"
+                data-title="MB LAB Ingredients by Efficacy">&#10530; Enlarge</button>
+      </h2>
+      <iframe src="plots/barchart_v2_260917.html"
+              title="MB LAB Ingredients by Efficacy" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <!-- ── Enlarged plot overlay ── -->
+  <div class="plot-modal" id="plot-modal" role="dialog" aria-modal="true"
+       aria-labelledby="plot-modal-title">
+    <div class="plot-modal-box">
+      <div class="plot-modal-head">
+        <span class="plot-modal-title" id="plot-modal-title"></span>
+        <span class="plot-modal-hint">Scroll to zoom &middot; Shift-drag to pan &middot; Esc to close</span>
+        <div class="zoom-controls">
+          <button class="zoom-btn" id="zoom-out" type="button" aria-label="Zoom out">&minus;</button>
+          <span class="zoom-level" id="zoom-level">100%</span>
+          <button class="zoom-btn" id="zoom-in" type="button" aria-label="Zoom in">+</button>
+          <button class="zoom-btn wide" id="zoom-reset" type="button">Reset</button>
+        </div>
+        <button class="plot-modal-close" id="plot-modal-close"
+                type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="plot-modal-body" id="plot-modal-body">
+        <div class="plot-zoom-stage" id="plot-zoom-stage"></div>
+        <div class="plot-modal-loading" id="plot-modal-loading">Loading chart&hellip;</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── User account button state ──
+    (function() {
+      var stored    = sessionStorage.getItem('trm_user');
+      var userBtn   = document.getElementById('user-btn');
+      var userIcon  = document.getElementById('user-icon');
+      var userLabel = document.getElementById('user-label');
+      var navLogin  = document.getElementById('nav-login');
+      var navLogout = document.getElementById('nav-logout');
+
+      if (stored) {
+        // A corrupted trm_user entry used to throw here and abort the rest of
+        // this script, leaving the hamburger menu dead.
+        var user = null;
+        try { user = JSON.parse(stored); } catch (e) { user = null; }
+
+        if (user && (user.displayName || user.username)) {
+          var label = user.displayName || user.username;
+          var initials = String(label)
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(function(w) { return w.charAt(0); })
+            .join('')
+            .slice(0, 2)
+            .toUpperCase();
+          userIcon.textContent  = initials || '?';
+          userLabel.textContent = label;
+          userBtn.href = 'mypage.html';
+          navLogin.style.display  = 'none';
+          navLogout.style.display = 'block';
+        } else {
+          sessionStorage.removeItem('trm_user');
+        }
+      }
+
+      navLogout.addEventListener('click', function() {
+        sessionStorage.removeItem('trm_user');
+        window.location.reload();
+      });
+    })();
+
+    // ── Dendrogram view switcher ──
+    // Swaps the iframe between the general tree and the technology tree.
+    var dendroFrame = document.getElementById('frame-dendro');
+    var dendroTitle = 'Ingredient Phylogenetic Tree - General view';
+
+    (function() {
+      var sw = document.getElementById('dendro-switch');
+      sw.addEventListener('click', function(e) {
+        var btn = e.target.closest('.view-btn');
+        if (!btn || btn.classList.contains('active')) return;
+
+        sw.querySelectorAll('.view-btn').forEach(function(b) {
+          b.classList.toggle('active', b === btn);
+        });
+        dendroFrame.src = btn.dataset.src;
+        dendroTitle = 'Ingredient Phylogenetic Tree - ' + btn.textContent.trim();
+      });
+    })();
+
+    // ── Enlarged plot overlay, with scroll-to-zoom ──
+    // A fresh iframe is created on open and removed on close, so only one
+    // enlarged chart is ever decrypted and held in memory at a time.
+    //
+    // Zoom is a CSS transform on the stage wrapping the iframe rather than a
+    // resize of the iframe: the charts are SVG, so they stay crisp at any zoom
+    // and nothing has to re-render on every wheel tick.
+    (function() {
+      var modal    = document.getElementById('plot-modal');
+      var body     = document.getElementById('plot-modal-body');
+      var stage    = document.getElementById('plot-zoom-stage');
+      var titleEl  = document.getElementById('plot-modal-title');
+      var loading  = document.getElementById('plot-modal-loading');
+      var closeBtn = document.getElementById('plot-modal-close');
+      var levelEl  = document.getElementById('zoom-level');
+      var frame    = null;
+      var attachTimer = null;
+
+      var MIN_Z = 1, MAX_Z = 8;
+      var z = 1, tx = 0, ty = 0;
+
+      function applyTransform() {
+        // Keep the scaled stage covering the viewport, so no blank gap appears.
+        var w = body.clientWidth, h = body.clientHeight;
+        tx = Math.min(0, Math.max(w - w * z, tx));
+        ty = Math.min(0, Math.max(h - h * z, ty));
+        stage.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + z + ')';
+        levelEl.textContent = Math.round(z * 100) + '%';
+      }
+
+      function resetZoom() { z = 1; tx = 0; ty = 0; applyTransform(); }
+
+      // Zoom about a point given in plot-modal-body coordinates, so whatever is
+      // under the cursor stays under the cursor.
+      function zoomAt(bx, by, factor) {
+        var nz = Math.min(MAX_Z, Math.max(MIN_Z, z * factor));
+        if (nz === z) return;
+        tx = bx - (bx - tx) * (nz / z);
+        ty = by - (by - ty) * (nz / z);
+        z = nz;
+        applyTransform();
+      }
+
+      function wheelFactor(e) {
+        var d = e.deltaY;
+        if (e.deltaMode === 1) d *= 16;        // lines -> px
+        else if (e.deltaMode === 2) d *= 100;  // pages -> px
+        return Math.exp(-d * 0.0015);
+      }
+
+      // --- wheel / pan over the overlay itself ---
+      body.addEventListener('wheel', function(e) {
+        if (!modal.classList.contains('open')) return;
+        e.preventDefault();
+        var r = body.getBoundingClientRect();
+        zoomAt(e.clientX - r.left, e.clientY - r.top, wheelFactor(e));
+      }, { passive: false });
+
+      var panning = false, panX = 0, panY = 0;
+
+      function startPan(clientX, clientY) {
+        panning = true; panX = clientX; panY = clientY;
+        body.classList.add('panning');
+      }
+      function movePan(clientX, clientY) {
+        if (!panning) return;
+        tx += clientX - panX;
+        ty += clientY - panY;
+        panX = clientX; panY = clientY;
+        applyTransform();
+      }
+      function endPan() { panning = false; body.classList.remove('panning'); }
+
+      body.addEventListener('mousedown', function(e) {
+        if (e.shiftKey || e.button === 1) { e.preventDefault(); startPan(e.clientX, e.clientY); }
+      });
+      window.addEventListener('mousemove', function(e) { movePan(e.clientX, e.clientY); });
+      window.addEventListener('mouseup', endPan);
+
+      // --- wheel / pan while the cursor is over the chart itself ---
+      // The iframe swallows events, so the same handlers are attached inside it.
+      // Same-origin only; on file:// the browser blocks this, and the controls
+      // in the header still work.
+      function attachInner() {
+        if (!frame) return;
+        var doc;
+        try { doc = frame.contentDocument; } catch (err) { return; }
+        if (!doc || doc.__trmZoomBound) return;
+        doc.__trmZoomBound = true;
+
+        doc.addEventListener('wheel', function(e) {
+          if (!modal.classList.contains('open')) return;
+          e.preventDefault();
+          // Inner coordinates are stage-local; map them into body space.
+          zoomAt(tx + e.clientX * z, ty + e.clientY * z, wheelFactor(e));
+        }, { passive: false });
+
+        doc.addEventListener('mousedown', function(e) {
+          if (e.shiftKey || e.button === 1) {
+            e.preventDefault();
+            startPan(tx + e.clientX * z, ty + e.clientY * z);
+          }
+        });
+        doc.addEventListener('mousemove', function(e) {
+          if (panning) movePan(tx + e.clientX * z, ty + e.clientY * z);
+        });
+        doc.addEventListener('mouseup', endPan);
+      }
+
+      function open(src, title) {
+        if (!src) return;
+        close();
+        titleEl.textContent = title || '';
+        loading.style.display = 'flex';
+        resetZoom();
+
+        frame = document.createElement('iframe');
+        frame.title = title || 'Enlarged chart';
+        frame.addEventListener('load', function() {
+          loading.style.display = 'none';
+          attachInner();
+        });
+        frame.src = src;
+        stage.appendChild(frame);
+
+        // The encrypted loaders replace their document via document.write, which
+        // discards listeners bound to the original one. Re-check for a while and
+        // bind to whichever document is current.
+        clearInterval(attachTimer);
+        var tries = 0;
+        attachTimer = setInterval(function() {
+          attachInner();
+          if (++tries > 80) clearInterval(attachTimer);
+        }, 150);
+
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        closeBtn.focus();
+      }
+
+      function close() {
+        modal.classList.remove('open');
+        document.body.style.overflow = '';
+        clearInterval(attachTimer);
+        endPan();
+        if (frame) { frame.remove(); frame = null; }
+        resetZoom();
+      }
+
+      document.getElementById('zoom-in').addEventListener('click', function() {
+        zoomAt(body.clientWidth / 2, body.clientHeight / 2, 1.25);
+      });
+      document.getElementById('zoom-out').addEventListener('click', function() {
+        zoomAt(body.clientWidth / 2, body.clientHeight / 2, 1 / 1.25);
+      });
+      document.getElementById('zoom-reset').addEventListener('click', resetZoom);
+      window.addEventListener('resize', function() {
+        if (modal.classList.contains('open')) applyTransform();
+      });
+
+      document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.card-open');
+        if (btn) {
+          if (btn.id === 'dendro-enlarge') {
+            // Follow whichever view is currently selected.
+            open(dendroFrame.getAttribute('src'), dendroTitle);
+          } else {
+            open(btn.dataset.plot, btn.dataset.title);
+          }
+        }
+      });
+
+      closeBtn.addEventListener('click', close);
+      modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('open')) close();
+      });
+    })();
+
+    // ── Side panel ──
+    (function() {
+      var menuBtn     = document.getElementById('menu-btn');
+      var sidePanel   = document.getElementById('side-panel');
+      var sideOverlay = document.getElementById('side-overlay');
+      var closeBtn    = document.getElementById('side-panel-close');
+
+      function openPanel()  { sidePanel.classList.add('open');    sideOverlay.classList.add('open'); }
+      function closePanel() { sidePanel.classList.remove('open'); sideOverlay.classList.remove('open'); }
+
+      menuBtn.addEventListener('click', openPanel);
+      closeBtn.addEventListener('click', closePanel);
+      sideOverlay.addEventListener('click', closePanel);
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closePanel();
+      });
+    })();
+  </script>
+</body>
+</html>
