@@ -147,6 +147,17 @@
       border-color: #4a6cf7;
       color: #fff;
     }
+    /* Divider between the dataset group and the layout group */
+    .view-switch-sep {
+      width: 1px;
+      align-self: stretch;
+      min-height: 1.1rem;
+      background: #dde2f0;
+      margin: 0 0.3rem;
+    }
+    /* The same switcher repeated inside the enlarged overlay */
+    .plot-modal-switch { flex: 0 0 auto; }
+    .plot-modal-switch[hidden] { display: none; }
 
     /* Search bar */
     .search-section {
@@ -251,9 +262,9 @@
       white-space: nowrap;
     }
     .plot-modal-close {
-      /* .zoom-controls already carries the margin-left:auto that pushes this
-         group to the right edge; a second auto margin would split the gap. */
-      margin-left: 0.25rem;
+      /* Pushes itself to the right edge now that the zoom buttons are gone -
+         zoom lives inside each chart, so the overlay has no controls of its own. */
+      margin-left: auto;
       background: none;
       border: 1px solid #ddd;
       border-radius: 999px;
@@ -294,37 +305,6 @@
       color: #aaa;
       font-size: 0.9rem;
       pointer-events: none;
-    }
-
-    /* Zoom controls in the overlay header */
-    .zoom-controls {
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-      margin-left: auto;
-      flex: 0 0 auto;
-    }
-    .zoom-btn {
-      font-family: inherit;
-      width: 28px;
-      height: 28px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      background: #fff;
-      color: #555;
-      font-size: 1rem;
-      line-height: 1;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .zoom-btn:hover { background: #eef1fb; border-color: #4a6cf7; color: #4a6cf7; }
-    .zoom-btn.wide { width: auto; padding: 0 0.6rem; font-size: 0.78rem; }
-    .zoom-level {
-      font-size: 0.78rem;
-      color: #666;
-      min-width: 3.4em;
-      text-align: center;
-      font-variant-numeric: tabular-nums;
     }
 
     /* Hamburger menu button */
@@ -531,12 +511,18 @@
       <div class="view-switch" id="dendro-switch">
         <span class="view-switch-label">View</span>
         <button class="view-btn active" type="button"
-                data-src="plots/dendrogram_general_v3.html">General view</button>
+                data-group="view" data-value="general">General view</button>
         <button class="view-btn" type="button"
-                data-src="plots/dendrogram_technology_v3.html">Microbiome technology view</button>
+                data-group="view" data-value="technology">Microbiome technology view</button>
+        <span class="view-switch-sep" aria-hidden="true"></span>
+        <span class="view-switch-label">Layout</span>
+        <button class="view-btn active" type="button"
+                data-group="layout" data-value="circular">Circular</button>
+        <button class="view-btn" type="button"
+                data-group="layout" data-value="horizontal">Horizontal</button>
       </div>
       <iframe id="frame-dendro"
-              src="plots/dendrogram_general_v3.html"
+              src="plots/dendrogram_general_circular_v24.html"
               title="Ingredient Phylogenetic Tree" loading="lazy"></iframe>
     </div>
   </div>
@@ -573,15 +559,24 @@
     <div class="plot-modal-box">
       <div class="plot-modal-head">
         <span class="plot-modal-title" id="plot-modal-title"></span>
-        <span class="plot-modal-hint">Scroll to zoom &middot; Shift-drag to pan &middot; Esc to close</span>
-        <div class="zoom-controls">
-          <button class="zoom-btn" id="zoom-out" type="button" aria-label="Zoom out">&minus;</button>
-          <span class="zoom-level" id="zoom-level">100%</span>
-          <button class="zoom-btn" id="zoom-in" type="button" aria-label="Zoom in">+</button>
-          <button class="zoom-btn wide" id="zoom-reset" type="button">Reset</button>
-        </div>
+        <span class="plot-modal-hint">Scroll to zoom &middot; Shift-drag to pan &middot; Double-click to reset &middot; Esc to close</span>
         <button class="plot-modal-close" id="plot-modal-close"
                 type="button" aria-label="Close">&times;</button>
+      </div>
+      <!-- Same dataset/layout choice as the card, so the view can be switched
+           without leaving the enlarged panel. Shown only for the tree. -->
+      <div class="view-switch plot-modal-switch" id="modal-dendro-switch" hidden>
+        <span class="view-switch-label">View</span>
+        <button class="view-btn active" type="button"
+                data-group="view" data-value="general">General view</button>
+        <button class="view-btn" type="button"
+                data-group="view" data-value="technology">Microbiome technology view</button>
+        <span class="view-switch-sep" aria-hidden="true"></span>
+        <span class="view-switch-label">Layout</span>
+        <button class="view-btn active" type="button"
+                data-group="layout" data-value="circular">Circular</button>
+        <button class="view-btn" type="button"
+                data-group="layout" data-value="horizontal">Horizontal</button>
       </div>
       <div class="plot-modal-body" id="plot-modal-body">
         <div class="plot-zoom-stage" id="plot-zoom-stage"></div>
@@ -631,194 +626,142 @@
       });
     })();
 
-    // ── Dendrogram view switcher ──
-    // Swaps the iframe between the general tree and the technology tree.
+    // ── Dendrogram switcher: dataset x layout ──
+    // One piece of state drives two identical switchers - the one on the card
+    // and the one inside the enlarged overlay - so the view can be changed
+    // without closing the overlay, and the card reflects whatever was last
+    // chosen there.
     var dendroFrame = document.getElementById('frame-dendro');
-    var dendroTitle = 'Ingredient Phylogenetic Tree - General view';
 
-    (function() {
-      var sw = document.getElementById('dendro-switch');
-      sw.addEventListener('click', function(e) {
-        var btn = e.target.closest('.view-btn');
-        if (!btn || btn.classList.contains('active')) return;
+    var DENDROGRAMS = {
+      'general-circular':      'plots/dendrogram_general_circular_v24.html',
+      'general-horizontal':    'plots/dendrogram_general_horizontal_v24.html',
+      'technology-circular':   'plots/dendrogram_technology_circular_v24.html',
+      'technology-horizontal': 'plots/dendrogram_technology_horizontal_v24.html'
+    };
 
-        sw.querySelectorAll('.view-btn').forEach(function(b) {
-          b.classList.toggle('active', b === btn);
+    var Dendro = (function() {
+      var bars   = [document.getElementById('dendro-switch'),
+                    document.getElementById('modal-dendro-switch')];
+      var choice = { view: 'general', layout: 'circular' };
+      var onChange = null;   // set by the overlay so it can reload in place
+
+      function label(group) {
+        var bar = bars[0];
+        var btn = bar && bar.querySelector('.view-btn[data-group="' + group +
+                                           '"][data-value="' + choice[group] + '"]');
+        return btn ? btn.textContent.trim() : choice[group];
+      }
+
+      function src()   { return DENDROGRAMS[choice.view + '-' + choice.layout]; }
+      function title() {
+        return 'Ingredient Phylogenetic Tree - ' + label('view') + ', ' + label('layout');
+      }
+
+      function syncButtons() {
+        bars.forEach(function(bar) {
+          if (!bar) return;
+          bar.querySelectorAll('.view-btn').forEach(function(b) {
+            b.classList.toggle('active', choice[b.dataset.group] === b.dataset.value);
+          });
         });
-        dendroFrame.src = btn.dataset.src;
-        dendroTitle = 'Ingredient Phylogenetic Tree - ' + btn.textContent.trim();
+      }
+
+      function set(group, value) {
+        if (!group || choice[group] === value) return;
+        choice[group] = value;
+        syncButtons();
+        var next = src();
+        if (!next) return;
+        dendroFrame.src = next;             // keep the card in step
+        if (onChange) onChange(next, title());
+      }
+
+      bars.forEach(function(bar) {
+        if (!bar) return;
+        bar.addEventListener('click', function(e) {
+          var btn = e.target.closest('.view-btn');
+          if (!btn) return;
+          set(btn.dataset.group, btn.dataset.value);
+        });
       });
+
+      syncButtons();
+      return {
+        src: src,
+        title: title,
+        onChange: function(fn) { onChange = fn; }
+      };
     })();
 
-    // ── Enlarged plot overlay, with scroll-to-zoom ──
+    // ── Enlarged plot overlay ──
     // A fresh iframe is created on open and removed on close, so only one
     // enlarged chart is ever decrypted and held in memory at a time.
     //
-    // Zoom is a CSS transform on the stage wrapping the iframe rather than a
-    // resize of the iframe: the charts are SVG, so they stay crisp at any zoom
-    // and nothing has to re-render on every wheel tick.
+    // Zoom deliberately lives INSIDE each chart rather than here. This overlay
+    // used to install its own wheel handler on the iframe's document, which
+    // needs same-origin access - so it did nothing at all when the page was
+    // opened from file://, and it could never help the dashboard cards, which
+    // have no overlay in the first place. The plotly charts now carry their own
+    // scrollZoom and the SVG charts an equivalent shim, so scrolling zooms in
+    // both places, and a second handler here would only fight them.
     (function() {
-      var modal    = document.getElementById('plot-modal');
-      var body     = document.getElementById('plot-modal-body');
-      var stage    = document.getElementById('plot-zoom-stage');
-      var titleEl  = document.getElementById('plot-modal-title');
-      var loading  = document.getElementById('plot-modal-loading');
-      var closeBtn = document.getElementById('plot-modal-close');
-      var levelEl  = document.getElementById('zoom-level');
-      var frame    = null;
-      var attachTimer = null;
+      var modal     = document.getElementById('plot-modal');
+      var stage     = document.getElementById('plot-zoom-stage');
+      var titleEl   = document.getElementById('plot-modal-title');
+      var loading   = document.getElementById('plot-modal-loading');
+      var closeBtn  = document.getElementById('plot-modal-close');
+      var switchBar = document.getElementById('modal-dendro-switch');
+      var frame     = null;
 
-      var MIN_Z = 1, MAX_Z = 8;
-      var z = 1, tx = 0, ty = 0;
-
-      function applyTransform() {
-        // Keep the scaled stage covering the viewport, so no blank gap appears.
-        var w = body.clientWidth, h = body.clientHeight;
-        tx = Math.min(0, Math.max(w - w * z, tx));
-        ty = Math.min(0, Math.max(h - h * z, ty));
-        stage.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + z + ')';
-        levelEl.textContent = Math.round(z * 100) + '%';
-      }
-
-      function resetZoom() { z = 1; tx = 0; ty = 0; applyTransform(); }
-
-      // Zoom about a point given in plot-modal-body coordinates, so whatever is
-      // under the cursor stays under the cursor.
-      function zoomAt(bx, by, factor) {
-        var nz = Math.min(MAX_Z, Math.max(MIN_Z, z * factor));
-        if (nz === z) return;
-        tx = bx - (bx - tx) * (nz / z);
-        ty = by - (by - ty) * (nz / z);
-        z = nz;
-        applyTransform();
-      }
-
-      function wheelFactor(e) {
-        var d = e.deltaY;
-        if (e.deltaMode === 1) d *= 16;        // lines -> px
-        else if (e.deltaMode === 2) d *= 100;  // pages -> px
-        return Math.exp(-d * 0.0015);
-      }
-
-      // --- wheel / pan over the overlay itself ---
-      body.addEventListener('wheel', function(e) {
-        if (!modal.classList.contains('open')) return;
-        e.preventDefault();
-        var r = body.getBoundingClientRect();
-        zoomAt(e.clientX - r.left, e.clientY - r.top, wheelFactor(e));
-      }, { passive: false });
-
-      var panning = false, panX = 0, panY = 0;
-
-      function startPan(clientX, clientY) {
-        panning = true; panX = clientX; panY = clientY;
-        body.classList.add('panning');
-      }
-      function movePan(clientX, clientY) {
-        if (!panning) return;
-        tx += clientX - panX;
-        ty += clientY - panY;
-        panX = clientX; panY = clientY;
-        applyTransform();
-      }
-      function endPan() { panning = false; body.classList.remove('panning'); }
-
-      body.addEventListener('mousedown', function(e) {
-        if (e.shiftKey || e.button === 1) { e.preventDefault(); startPan(e.clientX, e.clientY); }
-      });
-      window.addEventListener('mousemove', function(e) { movePan(e.clientX, e.clientY); });
-      window.addEventListener('mouseup', endPan);
-
-      // --- wheel / pan while the cursor is over the chart itself ---
-      // The iframe swallows events, so the same handlers are attached inside it.
-      // Same-origin only; on file:// the browser blocks this, and the controls
-      // in the header still work.
-      function attachInner() {
-        if (!frame) return;
-        var doc;
-        try { doc = frame.contentDocument; } catch (err) { return; }
-        if (!doc || doc.__trmZoomBound) return;
-        doc.__trmZoomBound = true;
-
-        doc.addEventListener('wheel', function(e) {
-          if (!modal.classList.contains('open')) return;
-          e.preventDefault();
-          // Inner coordinates are stage-local; map them into body space.
-          zoomAt(tx + e.clientX * z, ty + e.clientY * z, wheelFactor(e));
-        }, { passive: false });
-
-        doc.addEventListener('mousedown', function(e) {
-          if (e.shiftKey || e.button === 1) {
-            e.preventDefault();
-            startPan(tx + e.clientX * z, ty + e.clientY * z);
-          }
-        });
-        doc.addEventListener('mousemove', function(e) {
-          if (panning) movePan(tx + e.clientX * z, ty + e.clientY * z);
-        });
-        doc.addEventListener('mouseup', endPan);
-      }
-
-      function open(src, title) {
+      // Load a chart into the overlay. Used both on open and when the tree's
+      // view/layout switcher swaps the chart without closing the overlay.
+      function load(src, title) {
         if (!src) return;
-        close();
+        if (frame) { frame.remove(); frame = null; }
         titleEl.textContent = title || '';
         loading.style.display = 'flex';
-        resetZoom();
 
         frame = document.createElement('iframe');
         frame.title = title || 'Enlarged chart';
-        frame.addEventListener('load', function() {
-          loading.style.display = 'none';
-          attachInner();
-        });
+        frame.addEventListener('load', function() { loading.style.display = 'none'; });
         frame.src = src;
         stage.appendChild(frame);
+      }
 
-        // The encrypted loaders replace their document via document.write, which
-        // discards listeners bound to the original one. Re-check for a while and
-        // bind to whichever document is current.
-        clearInterval(attachTimer);
-        var tries = 0;
-        attachTimer = setInterval(function() {
-          attachInner();
-          if (++tries > 80) clearInterval(attachTimer);
-        }, 150);
-
+      function open(src, title, isDendro) {
+        if (!src) return;
+        switchBar.hidden = !isDendro;
+        load(src, title);
         modal.classList.add('open');
         document.body.style.overflow = 'hidden';
         closeBtn.focus();
       }
 
+      // Switching the tree's view/layout while the overlay is open: swap the
+      // chart in place instead of making the user close and re-open it.
+      Dendro.onChange(function(src, title) {
+        if (!modal.classList.contains('open') || switchBar.hidden) return;
+        load(src + '#big', title);
+      });
+
       function close() {
         modal.classList.remove('open');
         document.body.style.overflow = '';
-        clearInterval(attachTimer);
-        endPan();
         if (frame) { frame.remove(); frame = null; }
-        resetZoom();
+        switchBar.hidden = true;
       }
-
-      document.getElementById('zoom-in').addEventListener('click', function() {
-        zoomAt(body.clientWidth / 2, body.clientHeight / 2, 1.25);
-      });
-      document.getElementById('zoom-out').addEventListener('click', function() {
-        zoomAt(body.clientWidth / 2, body.clientHeight / 2, 1 / 1.25);
-      });
-      document.getElementById('zoom-reset').addEventListener('click', resetZoom);
-      window.addEventListener('resize', function() {
-        if (modal.classList.contains('open')) applyTransform();
-      });
 
       document.addEventListener('click', function(e) {
         var btn = e.target.closest('.card-open');
-        if (btn) {
-          if (btn.id === 'dendro-enlarge') {
-            // Follow whichever view is currently selected.
-            open(dendroFrame.getAttribute('src'), dendroTitle);
-          } else {
-            open(btn.dataset.plot, btn.dataset.title);
-          }
+        if (!btn) return;
+        if (btn.id === 'dendro-enlarge') {
+          // Follow whichever dataset/layout is currently selected, and append
+          // "#big": the dendrograms read that flag and scale their Class /
+          // Technology legend and tooltip up for the large overlay.
+          open(Dendro.src() + '#big', Dendro.title(), true);
+        } else {
+          open(btn.dataset.plot, btn.dataset.title, false);
         }
       });
 
