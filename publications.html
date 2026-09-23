@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MB Lab Publications</title>
+
+  <!-- Auth guard runs FIRST, as on index.html: an unauthenticated visitor is
+       redirected to login.html before any of the list is rendered. -->
+  <script src="data/auth-guard.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8f8f8;
+      color: #333;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #4a6cf7;
+      text-decoration: none;
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+      transition: color 0.2s;
+    }
+    .back-btn:hover { color: #3a5ae0; }
+
+    .header { margin-bottom: 1.5rem; }
+    .header h1 { font-weight: 600; font-size: 1.6rem; }
+    .header p {
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+      color: #888;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      overflow: hidden;
+      color: #333;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      background: #f5f6fa;
+      border-bottom: 1px solid #e0e3eb;
+      flex-wrap: wrap;
+    }
+    .count {
+      font-size: 0.85rem;
+      color: #666;
+      white-space: nowrap;
+    }
+    #search-input {
+      flex: 1;
+      min-width: 220px;
+      padding: 0.45rem 0.85rem;
+      border: 1px solid #d8ddf0;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-family: inherit;
+      outline: none;
+      color: #333;
+    }
+    #search-input:focus { border-color: #4a6cf7; }
+
+    .type-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #eef0f5;
+      flex-wrap: wrap;
+    }
+    .type-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #888;
+      white-space: nowrap;
+      margin-right: 0.25rem;
+    }
+    .type-btn {
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid #d8ddf0;
+      background: #fff;
+      color: #555;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .type-btn:hover { background: #eef1fb; }
+    .type-btn.active {
+      background: #4a6cf7;
+      border-color: #4a6cf7;
+      color: #fff;
+    }
+
+    /* ── Citation rows: same visual language as the dashboard panel ── */
+    .j-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.95rem;
+      padding: 0.8rem 1.1rem;
+      border-bottom: 1px solid #f2f3f7;
+      text-decoration: none;
+      color: #333;
+      transition: background 0.15s;
+    }
+    .j-item:last-child { border-bottom: none; }
+    a.j-item:hover { background: #f3f6ff; }
+    a.j-item:hover .j-cite { color: #1a1a1a; }
+
+    /* No DOI in the source CSV: still listed, but not presented as a link. */
+    .j-item.j-nolink { cursor: default; }
+    .j-item.j-nolink .j-cite { color: #6d6d6d; }
+
+    .j-meta {
+      flex: 0 0 68px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+    .j-year {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #4a6cf7;
+      white-space: nowrap;
+    }
+    .j-year.j-forth {
+      color: #b0851f;
+      font-size: 0.7rem;
+      letter-spacing: 0.02em;
+    }
+    .j-type {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #8a93ad;
+      background: #eef1f8;
+      border-radius: 999px;
+      padding: 0.1rem 0.42rem;
+      white-space: nowrap;
+    }
+
+    .j-cite {
+      flex: 1 1 auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      min-width: 0;
+    }
+    .j-cite i { color: #555; }
+
+    /* MB Lab authors, from MBlab_authors_260922.csv */
+    .j-lab { color: #4a6cf7; font-weight: 700; }
+
+    .j-nodoi {
+      font-size: 0.66rem;
+      color: #c2c2c2;
+      white-space: nowrap;
+      margin-left: 0.35rem;
+    }
+
+    .j-empty {
+      padding: 2.5rem 1.25rem;
+      text-align: center;
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+
+    .foot-note {
+      margin-top: 1rem;
+      font-size: 0.78rem;
+      color: #aaa;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 900px) {
+      body { padding: 1rem; }
+      .j-item { gap: 0.6rem; padding: 0.7rem 0.8rem; }
+      .j-meta { flex-basis: 56px; }
+      .j-cite { font-size: 0.83rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-btn">&larr; Back to Dashboard</a>
+
+    <div class="header">
+      <h1>MB Lab Publications</h1>
+      <p>Peer-reviewed papers co-authored by MB Lab researchers, newest first.
+         MB Lab authors are highlighted. Click a citation to open it by DOI.</p>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <span class="count" id="count-info">Loading&hellip;</span>
+        <input type="text" id="search-input"
+               placeholder="Filter by title, author or journal&hellip;" autocomplete="off">
+      </div>
+      <div class="type-bar" id="type-bar">
+        <span class="type-label">Type:</span>
+        <!-- filled by JS from the data itself -->
+      </div>
+      <div id="journal-list">
+        <div class="j-empty">Loading publications&hellip;</div>
+      </div>
+    </div>
+
+    <p class="foot-note" id="foot-note"></p>
+  </div>
+
+  <!-- Same generated data file the dashboard panel uses. -->
+  <script src="data/journals.js"></script>
+
+  <script>
+    // JOURNAL_DATA is built by tools/build_journals.py, which does the CSV
+    // parsing, MLA formatting, MB Lab author highlighting and HTML escaping.
+    // Only papers with at least one MB Lab author are present. Ordering is
+    // newest-first and already applied by the generator.
+    (function() {
+      var listEl   = document.getElementById('journal-list');
+      var countEl  = document.getElementById('count-info');
+      var searchEl = document.getElementById('search-input');
+      var typeBar  = document.getElementById('type-bar');
+      var footEl   = document.getElementById('foot-note');
+
+      var data = (typeof JOURNAL_DATA !== 'undefined' && JOURNAL_DATA) ? JOURNAL_DATA : [];
+      if (!data.length) {
+        listEl.innerHTML = '<div class="j-empty">No publications to show.</div>';
+        countEl.textContent = '0 papers';
+        return;
+      }
+
+      var activeType = '';       // '' = all
+      var query      = '';
+
+      // ── Type filter chips, derived from the data so a new journal type in
+      //    the CSV needs no change here ──
+      var types = [];
+      data.forEach(function(e) {
+        if (e.type && types.indexOf(e.type) === -1) types.push(e.type);
+      });
+      types.sort();
+
+      function addChip(label, value) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'type-btn' + (value === activeType ? ' active' : '');
+        b.textContent = label;
+        b.dataset.value = value;
+        typeBar.appendChild(b);
+      }
+      addChip('All', '');
+      types.forEach(function(t) { addChip(t, t); });
+
+      typeBar.addEventListener('click', function(e) {
+        var btn = e.target.closest('.type-btn');
+        if (!btn) return;
+        activeType = btn.dataset.value;
+        typeBar.querySelectorAll('.type-btn').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.value === activeType);
+        });
+        render();
+      });
+
+      searchEl.addEventListener('input', function() {
+        query = searchEl.value.trim().toLowerCase();
+        render();
+      });
+
+      function buildRow(entry) {
+        var hasDoi = !!entry.doi;
+
+        // A DOI makes the row a real link; without one it stays a plain row
+        // rather than a link that goes nowhere.
+        var row = document.createElement(hasDoi ? 'a' : 'div');
+        row.className = 'j-item' + (hasDoi ? '' : ' j-nolink');
+        if (hasDoi) {
+          row.href = 'https://doi.org/' + encodeURI(entry.doi);
+          row.target = '_blank';
+          row.rel = 'noopener noreferrer';
+        }
+        // The citation may abbreviate a long author list, so keep the complete
+        // one reachable on hover.
+        if (entry.full) row.title = entry.full;
+
+        var meta = document.createElement('span');
+        meta.className = 'j-meta';
+
+        var year = document.createElement('span');
+        if (entry.submitted) {
+          year.className = 'j-year j-forth';
+          year.textContent = 'In press';
+        } else {
+          year.className = 'j-year';
+          year.textContent = entry.year || '';
+        }
+        meta.appendChild(year);
+
+        if (entry.type) {
+          var type = document.createElement('span');
+          type.className = 'j-type';
+          type.textContent = entry.type;
+          meta.appendChild(type);
+        }
+
+        var cite = document.createElement('span');
+        cite.className = 'j-cite';
+        cite.innerHTML = entry.cite;
+        if (!hasDoi) {
+          var nd = document.createElement('span');
+          nd.className = 'j-nodoi';
+          nd.textContent = '(no DOI)';
+          cite.appendChild(nd);
+        }
+
+        row.appendChild(meta);
+        row.appendChild(cite);
+        return row;
+      }
+
+      function render() {
+        var shown = data.filter(function(e) {
+          if (activeType && e.type !== activeType) return false;
+          if (query && (e.text || '').indexOf(query) === -1) return false;
+          return true;
+        });
+
+        listEl.innerHTML = '';
+        if (!shown.length) {
+          listEl.innerHTML = '<div class="j-empty">No publications match that filter.</div>';
+        } else {
+          var frag = document.createDocumentFragment();
+          shown.forEach(function(e) { frag.appendChild(buildRow(e)); });
+          listEl.appendChild(frag);
+        }
+
+        countEl.textContent = (shown.length === data.length)
+          ? data.length + ' papers'
+          : shown.length + ' of ' + data.length + ' papers';
+      }
+
+      render();
+
+      var noDoi = data.filter(function(e) { return !e.doi; }).length;
+      footEl.textContent = noDoi
+        ? noDoi + ' of ' + data.length + ' entries have no DOI recorded yet and are '
+          + 'listed without a link.'
+        : '';
+    })();
+  </script>
+</body>
+</html>
